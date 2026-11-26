@@ -83,11 +83,11 @@ include = [
 dev = [
   "ruff==0.17.6",
   "mypy==2.4.1",
-  "coverage==7.17.3",
+  "coverage==7.17.4",
   "build==1.6.1",
   "twine==7.0.0",
   "pre-commit==4.7.0",
-  "pyyaml==6.0.3",  # scripts/build_rules.py only; the same pin the guard-rules CI job uses
+  "pyyaml==6.0.4",  # scripts/build_rules.py only; the same pin the guard-rules CI job uses
 ]
 
 [tool.ruff]
