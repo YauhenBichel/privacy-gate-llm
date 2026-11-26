@@ -82,6 +82,20 @@ class TestBundledHead(unittest.TestCase):
         with self.assertRaises(ValueError):
             Gate.load(embedder=Raw()).decide("x")
 
+    def test_refuses_a_vector_that_is_not_a_number(self) -> None:
+        # One NaN makes the norm NaN. `abs(norm - 1) > 0.01` is false for NaN, so the vector used to be scored,
+        # the score was NaN, `NaN > threshold` is false, and the prompt was released.
+        for bad in (float("nan"), float("inf"), float("-inf")):
+
+            class Broken:
+                name = "broken"
+
+                def embed(self, texts: list[str], value: float = bad) -> list[list[float]]:
+                    return [[value, *unit(1.0)[1:]] for _ in texts]
+
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                Gate.load(embedder=Broken()).decide("x")
+
 
 class TestOllamaBackend(unittest.TestCase):
     def test_posts_to_api_embed(self) -> None:
@@ -255,7 +269,7 @@ class TestCli(unittest.TestCase):
         self.assertEqual(info["dimensions"], DIMS)
         self.assertEqual(info["ruleset"]["id"], "privacy-v2")
         self.assertEqual(len(info["ruleset"]["sha256"]), 64)
-        self.assertEqual(info["ruleset"]["rules"], 17)
+        self.assertEqual(info["ruleset"]["rules"], 18)
 
     def test_no_text_is_a_usage_error(self) -> None:
         code, _out, err = self.run_cli(["check"], stdin="")

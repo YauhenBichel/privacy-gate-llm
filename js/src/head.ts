@@ -19,7 +19,8 @@ export interface Decision {
 /**
  * Score one `bge-m3` embedding (1024 numbers, L2-normalised) against the bundled head.
  *
- * Throws on a vector of the wrong length or one whose norm is not 1 (within 0.01). The head was fitted on unit
+ * Throws on a vector of the wrong length, one whose norm is not 1 (within 0.01) or is not a number, and on a
+ * score that is not finite. The head was fitted on unit
  * vectors; an un-normalised one does not fail, it scores confidently wrong, so it is refused, as in Python.
  */
 export function score(embedding: ArrayLike<number>): number {
@@ -39,6 +40,10 @@ export function score(embedding: ArrayLike<number>): number {
   let total = HEAD.bias;
   for (let i = 0; i < n; i++) {
     total += (HEAD.weights[i]! * (embedding[i]! - HEAD.mean[i]!)) / HEAD.stdev[i]!;
+  }
+  if (!Number.isFinite(total)) {
+    // A damaged head must not read as "below the threshold": NaN > THRESHOLD is false, which would release.
+    throw new Error("the head gave a score that is not a finite number; refusing to decide");
   }
   return total;
 }

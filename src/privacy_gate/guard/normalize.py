@@ -6,29 +6,58 @@ from. The patterns run on every view; a finding in a view is mapped back through
 always masks or reports a span of the text the person actually sent.
 
 The base view:
-1. undoes URL escapes (``%40``) and JSON/JavaScript ``\\uXXXX`` escapes; a run of escapes maps to the whole run;
-2. per character, applies NFKC (full-width letters, ligatures), removes zero-width and soft-hyphen characters,
-   and folds every dash and minus to ``-``.
+1. undoes URL escapes (``%40``), JSON/JavaScript ``\\uXXXX`` escapes and HTML character references
+   (``&#64;``, ``&#x40;``, ``&commat;``); a run of escapes maps to the whole run;
+2. per character, applies NFKC (full-width letters, ligatures, superscript digits), then
+   - removes what a reader does not see: format characters (zero-width, bidi marks, tag characters),
+     combining marks and variation selectors, filler letters and control characters other than tab and
+     line breaks;
+   - folds every dash and minus to ``-`` and every decimal digit of another script to ``0``-``9``;
+   - folds the Cyrillic and Greek letters that look like a Latin letter to that letter.
+
+The original text is always read as well, so a view can only add findings.
 
 Decoded views: a base64 run of 24 or more characters, or a hex run of 32 or more, that decodes to printable
 UTF-8 becomes a view of its own, and is normalised and decoded again, to a depth of 2. Every character of a
 decoded view maps to the whole encoded run, so a secret inside base64 holds the run it was hidden in.
 
-Not done here (design deviations, see the pull request): folding confusable letters (Cyrillic ``а`` for
-Latin ``a``), HTML entities and rot13.
+Not done here: rot13 and other ciphers, digits written as words, and look-alikes outside the table below
+(the full Unicode confusables list is 6,000 entries; this one covers the letters used to fake a Latin word).
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import html
 import re
 import unicodedata
 from dataclasses import dataclass
 
-ZERO_WIDTH = frozenset("\u200b‌‍⁠﻿­᠎")
-DASHES = frozenset("‐‑‒–—―−﹘﹣－")
-_ESCAPE = re.compile(r"(?:%[0-9A-Fa-f]{2})+|(?:\\u[0-9A-Fa-f]{4})+")
+ZERO_WIDTH = frozenset("\u200b\u200c\u200d\u2060\ufeff\u00ad\u180e")
+DASHES = frozenset("\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d")
+#: Letters that render as nothing: Hangul fillers and the Braille blank. A digit run can hide a gap in them.
+FILLERS = frozenset("\u115f\u1160\u3164\uffa0\u2800")
+#: Unicode categories a reader does not see: format, non-spacing and enclosing marks, controls.
+_UNSEEN = frozenset({"Cf", "Mn", "Me", "Cc"})
+_KEPT_CONTROLS = frozenset("\t\n\r")
+#: Cyrillic and Greek letters drawn like a Latin letter, so ``p\u0430ssword`` reads as ``password``.
+CONFUSABLES = dict(
+    zip(
+        "\u0430\u0435\u043e\u0440\u0441\u0443\u0445\u0456\u0458\u0455\u04bb\u0501\u051b\u051d"
+        "\u0410\u0412\u0415\u041a\u041c\u041d\u041e\u0420\u0421\u0422\u0425\u0406\u0408\u0405"
+        "\u03bf\u03b1\u03bd\u03c1\u03b9\u03ba"
+        "\u0391\u0392\u0395\u0396\u0397\u0399\u039a\u039c\u039d\u039f\u03a1\u03a4\u03a5\u03a7",
+        "aeopcyxijshdqwABEKMHOPCTXIJSoavpikABEZHIKMNOPTYX",
+        strict=True,
+    )
+)
+_ESCAPE = re.compile(
+    r"(?:%[0-9A-Fa-f]{2})+|(?:\\u[0-9A-Fa-f]{4})+"
+    r"|(?:&#[0-9]{1,7};?|&#[xX][0-9A-Fa-f]{1,6};?|&[A-Za-z][A-Za-z0-9]{1,31};)+"
+)
+#: Anything the base rewrite could change. Printable ASCII without an escape is returned as it is.
+_NEEDS_REWRITE = re.compile(r"[^\t\n\r\x20-\x7e]|%[0-9A-Fa-f]{2}|\\u[0-9A-Fa-f]{4}|&[#A-Za-z]")
 _BASE64 = re.compile(r"[A-Za-z0-9+/_-]{24,}={0,2}")
 _HEX = re.compile(r"(?:[0-9A-Fa-f]{2}){16,}")
 MAX_DECODE_DEPTH = 2
@@ -57,8 +86,7 @@ class View:
 
 def _rewrite(text: str) -> tuple[str, list[int], list[int]] | None:
     """The base rewrite of `text` with its offset table, or None when it changes nothing."""
-    plain = text.isascii() and "%" not in text and "\\u" not in text
-    if plain:
+    if _NEEDS_REWRITE.search(text) is None:
         return None
     out: list[str] = []
     starts: list[int] = []
@@ -66,12 +94,27 @@ def _rewrite(text: str) -> tuple[str, list[int], list[int]] | None:
 
     def emit(chunk: str, start: int, end: int) -> None:
         for ch in chunk:
-            if ch in ZERO_WIDTH:
+            if " " <= ch <= "~":
+                folded_run = ch
+            elif ch in ZERO_WIDTH or ch in FILLERS:
                 continue
-            for folded in unicodedata.normalize("NFKC", ch):
-                if folded in ZERO_WIDTH:
-                    continue
-                out.append("-" if folded in DASHES else folded)
+            else:
+                folded_run = unicodedata.normalize("NFKC", ch)
+            for folded in folded_run:
+                if folded > "~" or folded < " ":
+                    if folded in _KEPT_CONTROLS:
+                        pass
+                    elif folded in DASHES:
+                        folded = "-"
+                    elif folded in CONFUSABLES:
+                        folded = CONFUSABLES[folded]
+                    elif folded in FILLERS or unicodedata.category(folded) in _UNSEEN:
+                        continue
+                    else:
+                        digit = unicodedata.decimal(folded, None)
+                        if digit is not None:
+                            folded = str(digit)
+                out.append(folded)
                 starts.append(start)
                 ends.append(end)
 
@@ -96,6 +139,9 @@ def _rewrite(text: str) -> tuple[str, list[int], list[int]] | None:
 
 def _unescape(run: str) -> str | None:
     try:
+        if run.startswith("&"):
+            decoded = html.unescape(run)
+            return None if decoded == run else decoded
         if run.startswith("%"):
             return bytes(int(run[i + 1 : i + 3], 16) for i in range(0, len(run), 3)).decode("utf-8")
         units = [int(run[i + 2 : i + 6], 16) for i in range(0, len(run), 6)]

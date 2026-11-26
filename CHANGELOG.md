@@ -19,6 +19,33 @@ MoleCare brand. 1.0.0 and 1.0.1 stay on PyPI as `molecare-privacy-gate`; later r
 - The live monitor installs `privacy-gate-llm`, and falls back to the former name until the first release under
   the new one is on PyPI.
 
+Guard and rules hardening, from a stress test of 1.0.1 plus `main` (ruleset `privacy-v2` 2.1.0 to **2.2.0**, 18 rules):
+
+- **Time.** `PG-SECRET-003` no longer backtracks: `password_` repeated to 160 KB took 56 s in Python, now 0.15 s.
+  Overlaps are resolved by a sort and one sweep, masking joins once, and the JavaScript engine counts code points
+  in one pass: 640 KB of e-mail addresses went from 24 s to 1.3 s (Python) and from 49 s to 0.07 s (JavaScript).
+  One narrowing: an identifier with more than 128 word characters after `password`, `secret`, ... is not matched.
+- **Fail closed on NaN.** `Gate` refuses a vector whose norm is NaN or infinite, and a score that is not finite
+  (`ValueError`); one NaN used to give a NaN score, which compares as "below the threshold". `score()` in
+  JavaScript throws on a non-finite total.
+- **Rules.** New `PG-SECRET-006` (a password stated in a sentence); the e-mail, phone, card, patient id,
+  national id, IBAN, private IP and home path rules read more spellings (separators, `[.]`, a leading zero in
+  an octet, labels with punctuation). Rules fire more, never less, apart from the 128-character bound above.
+- **L0** also decodes HTML character references, drops invisible characters (format, combining and control
+  characters, Hangul and braille fillers), folds decimal digits of other scripts to ASCII and folds Cyrillic and
+  Greek look-alike letters.
+- **Request bodies.** A field named as a secret (`password`, `api_key`, `clientSecret`, ...) holds its value even
+  when the value alone has no shape; a field named as a phone masks a bare 10 to 15 digit value. Neighbouring
+  leaves are also read joined, so an e-mail address or a labelled value split across fields is blocked. A mask
+  finding that stops at an accented letter (`/home/josé/`) is blocked instead of half masked.
+- **Unmasking.** A surrogate inside a longer word or number is left alone (`192.0.2.16` issued, `192.0.2.165`
+  in the reply). `StreamUnmasker` may hold a complete surrogate until the next character or `flush()`. The
+  cost of `unmask` and of the residual check no longer grows with the values in the session, and `SessionStore`
+  sweeps idle vaults at most once a minute instead of on every request.
+- `mask_text` raises `ValueError` on overlapping findings (the guard blocks). `Guard` warns once
+  (`RuntimeWarning`) when it masks without a `caller` and `session`: all such requests share one vault.
+- Docs: what the JavaScript package and the lite profile do not cover, and the known limits, in `SECURITY.md`.
+
 npm package `privacy-gate-llm` (in `js/`): the head and the guard's L1 rules for JavaScript and TypeScript.
 
 - `score()`, `hold()`, `decide()` on a `bge-m3` embedding, with the same dimension and L2-norm refusals as

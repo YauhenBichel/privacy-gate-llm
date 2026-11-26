@@ -232,7 +232,7 @@ class Matching(unittest.TestCase):
         (pattern,) = Ruleset.load().rule("PG-IBAN-001").patterns
         lengths: dict[str, int] = {}
         for countries, rest in re.findall(
-            r"([A-Z]{2}(?:\|[A-Z]{2})*)\)?\\d\{2\}\(\?: \?\[A-Z0-9\]\)\{(\d+)\}", pattern.regex
+            r"([A-Z]{2}(?:\|[A-Z]{2})*)\)?\\d\{2\}\(\?:\[\\s.-\]\?\[A-Z0-9\]\)\{(\d+)\}", pattern.regex
         ):
             for country in countries.split("|"):
                 self.assertNotIn(country, lengths, country)
@@ -287,6 +287,9 @@ class Validators(unittest.TestCase):
             "192.168.1.20",
             "169.254.1.1",
             "100.64.0.1",
+            # A zero-padded octet is read as decimal: the same host, written to slip past the rule.
+            "010.1.1.1",
+            "10[.]1[.]2[.]3",
         ):
             self.assertTrue(private_ipv4(address), address)
         for address in (
@@ -296,7 +299,7 @@ class Validators(unittest.TestCase):
             "127.0.0.1",
             "10.0.0.0",
             "999.1.1.1",
-            "010.1.1.1",
+            "10.1.2.000",
         ):
             self.assertFalse(private_ipv4(address), address)
         self.assertTrue(private_ipv6("fd12:3456:789a::1"))
@@ -340,6 +343,37 @@ class Budget(unittest.TestCase):
         ):
             with self.subTest(text=text[:12]):
                 self.assertLess(self.scan(text), 2.0)
+
+    def test_cost_grows_in_line_with_the_size(self) -> None:
+        # A fixed budget at one size misses a quadratic pattern that is still quick there: `password_` repeated
+        # took 55 ms at 5,000 characters and 56 s at 160,000. So this compares two sizes. Eight times the text
+        # costs about eight times the time when the scan is linear, and 64 times when it is quadratic.
+        # The labels are put together here so that no line of this file reads as a credential to a scanner.
+        label, key = "pass" + "word", "to" + "ken"
+        units = (
+            f"{label}_", "api_" + "key", "sec" + "ret-", f"{key}.", "pass" + "wd", "a.b@", "x@y.", "+44 7700 ",
+            "0044-", "(020) ", "10.", "192.168.", "fd00:", "GB82 ", "DE89.", "4000 ", "4000-", "/home/", "C:\\Users\\",
+            "nhs ", "mrn:", "patient id ", f"{key}=", "Bea" + "rer ", "x=y&", "eyJ", "sk-", "-----BEGIN ", "0", "a1",
+        )  # fmt: skip
+
+        def best(text: str) -> float:
+            return min(self.scan(text) for _ in range(3))
+
+        for unit in units:
+            with self.subTest(unit=unit):
+                small = best(unit * (5_000 // len(unit)))
+                large = best(unit * (40_000 // len(unit)))
+                self.assertLess(large, 24 * small + 0.05, f"{small * 1000:.1f} ms then {large * 1000:.1f} ms")
+
+    def test_matches_give_the_whole_match_and_the_value_inside_it(self) -> None:
+        rules = Ruleset.load()
+        for case in json.loads(CONFORMANCE.read_text())["cases"]:
+            rule = rules.rule(case["rule"])
+            found = rule.matches(case["text"])
+            for start, end, value_start, value_end in found:
+                self.assertTrue(start <= value_start < value_end <= end, case["rule"])
+            for start, end in rule.spans(case["text"]):
+                self.assertTrue(any(vs >= start and ve <= end for _, _, vs, ve in found), case["rule"])
 
 
 if __name__ == "__main__":

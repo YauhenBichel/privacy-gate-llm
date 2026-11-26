@@ -16,6 +16,10 @@ Surrogate shapes keep the text readable to the model and are chosen so they cann
 | home_path | the user segment becomes ``u-<tag>`` |
 | tag | ``<LABEL_tag>``, e.g. ``<IBAN_k3x9qa>`` |
 
+`SURROGATE_SHAPES` below is the same table as a pattern: unmasking and the check after masking find
+candidates by shape and look each up in the vault, so neither compiles a pattern out of every surrogate
+issued (with 8,000 values in a session that was most of each call's time).
+
 A tag is 6 base-32 characters. If a surrogate is already taken by another value, the HMAC is taken again
 with a counter until it is free.
 
@@ -30,12 +34,26 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import threading
 import time
 from collections.abc import Callable
 
 IDLE_SECONDS = 12 * 3600
 _MAX_BUMPS = 64
+_TAG = r"[a-z2-7]{6}"
+#: (pattern, starts with a letter or digit, ends with one) for every shape `make_surrogate` writes. A test
+#: checks the two against each other. The label of a tag comes from the rules, so it is only loosely bound.
+SURROGATE_SHAPES: tuple[tuple[str, bool, bool], ...] = (
+    (rf"m-{_TAG}@masked\.invalid", True, True),
+    (r"\+44 7700 900[0-9]{3}", False, True),
+    (r"(?:192\.0\.2|198\.51\.100|203\.0\.113)\.[0-9]{1,3}", True, True),
+    (r"2001:db8::[0-9a-f]{1,4}:[0-9a-f]{1,4}", True, True),
+    (rf"u-{_TAG}", True, True),
+    (rf"<[^<>\s]{{1,64}}_{_TAG}>", False, False),
+)
+#: Any surrogate shape, wherever it stands.
+SURROGATE = re.compile("|".join(shape for shape, _, _ in SURROGATE_SHAPES))
 
 
 class Vault:
@@ -43,8 +61,11 @@ class Vault:
         self._key = key or os.urandom(32)
         self._by_value: dict[tuple[str, str], str] = {}
         self._by_surrogate: dict[str, str] = {}
-        #: Bumped on every new surrogate, so unmaskers can cache their matcher.
+        #: Bumped on every new surrogate.
         self.version = 0
+        #: Every proper prefix of an issued surrogate, kept as surrogates are issued: what a stream holds back.
+        self._prefixes: set[str] = set()
+        self.longest = 0
         self.lock = threading.Lock()
 
     def __repr__(self) -> str:  # never show values
@@ -76,6 +97,8 @@ class Vault:
                     bump += 1
             self._by_value[(category, value)] = candidate
             self._by_surrogate[candidate] = value
+            self._prefixes.update(candidate[:i] for i in range(1, len(candidate)))
+            self.longest = max(self.longest, len(candidate))
             self.version += 1
             return candidate
 
@@ -88,6 +111,10 @@ class Vault:
 
     def issued(self, text: str) -> bool:
         return text in self._by_surrogate
+
+    def starts_one(self, text: str) -> bool:
+        """True when `text` is the start, but not the whole, of a surrogate this vault issued."""
+        return text in self._prefixes
 
 
 def tag_of(mac: bytes) -> str:
@@ -123,6 +150,9 @@ class SessionStore:
         self._idle = idle_seconds
         self._clock = clock
         self._vaults: dict[bytes, tuple[Vault, float]] = {}
+        #: Expired vaults hold real values, so they are dropped at most a minute late.
+        self._sweep_every = min(60.0, max(idle_seconds, 0.0) / 10)
+        self._next_sweep = clock()
         self._lock = threading.Lock()
 
     def _name(self, caller: str, session: str) -> bytes:
@@ -132,11 +162,15 @@ class SessionStore:
         now = self._clock()
         name = self._name(caller, session)
         with self._lock:
-            for key, (_, used) in list(self._vaults.items()):
-                if now - used > self._idle:
-                    del self._vaults[key]
+            # Every vault is checked for expiry when it is asked for; the sweep over all of them runs once
+            # per interval, not on every call (with 20,000 sessions that sweep was the cost of a request).
+            if now >= self._next_sweep:
+                for key, (_, used) in list(self._vaults.items()):
+                    if now - used > self._idle:
+                        del self._vaults[key]
+                self._next_sweep = now + self._sweep_every
             entry = self._vaults.get(name)
-            vault = entry[0] if entry else Vault()
+            vault = entry[0] if entry and now - entry[1] <= self._idle else Vault()
             self._vaults[name] = (vault, now)
             return vault
 

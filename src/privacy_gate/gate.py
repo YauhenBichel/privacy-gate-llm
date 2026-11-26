@@ -128,7 +128,10 @@ class Gate:
                 f"{len(self.model.weights)}; wrong embedding model?"
             )
         norm = math.sqrt(sum(value * value for value in vector))
-        if abs(norm - 1.0) > 0.01:
+        # Written as "not within" so that a NaN norm (one NaN in the vector) is refused too: every
+        # comparison with NaN is false, and `abs(norm - 1) > 0.01` let it through to a NaN score, which
+        # is never above the threshold, so the text was released.
+        if not abs(norm - 1.0) <= 0.01:
             # The head was fitted on Ollama's /api/embed output, which is
             # L2-normalised. sentence-transformers does NOT normalise by
             # default, and an un-normalised vector does not fail — it produces a
@@ -140,4 +143,7 @@ class Gate:
                 "normalize_embeddings=True; Ollama already does this."
             )
         score = self.model.score(vector)
+        if not math.isfinite(score):
+            # A damaged head (a zero or missing standard deviation) must not read as "below the threshold".
+            raise ValueError("the head gave a score that is not a finite number; refusing to decide")
         return Decision(hold=score > self.threshold, score=score, threshold=self.threshold)

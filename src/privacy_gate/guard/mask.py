@@ -7,12 +7,11 @@ masking did not hold, and the caller blocks: masking is never allowed to send wh
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 
 from .detect import Finding, detect
 from .rules import Ruleset
-from .vault import Vault
+from .vault import SURROGATE, Vault
 
 
 def surrogate_kind(finding: Finding, ruleset: Ruleset) -> tuple[str, str]:
@@ -24,14 +23,18 @@ def surrogate_kind(finding: Finding, ruleset: Ruleset) -> tuple[str, str]:
 
 def mask_text(text: str, findings: Iterable[Finding], vault: Vault, ruleset: Ruleset) -> str:
     """`text` with each finding's span replaced by its surrogate. Findings must be disjoint."""
-    out = text
-    for finding in sorted(findings, key=lambda f: f.start, reverse=True):
+    out: list[str] = []
+    pos = 0
+    # Pieces joined once: rebuilding the whole text for every finding is quadratic in a long text.
+    for finding in sorted(findings, key=lambda f: f.start):
+        if finding.start < pos:
+            raise ValueError("findings to mask must not overlap")
         kind, label = surrogate_kind(finding, ruleset)
-        value = text[finding.start : finding.end]
-        out = (
-            out[: finding.start] + vault.surrogate(finding.category, value, kind, label) + out[finding.end :]
-        )
-    return out
+        out.append(text[pos : finding.start])
+        out.append(vault.surrogate(finding.category, text[finding.start : finding.end], kind, label))
+        pos = finding.end
+    out.append(text[pos:])
+    return "".join(out)
 
 
 def residual(text: str, vault: Vault, ruleset: Ruleset, layers: Iterable[str]) -> list[Finding]:
@@ -42,11 +45,15 @@ def residual(text: str, vault: Vault, ruleset: Ruleset, layers: Iterable[str]) -
     followed by an address surrogate can read as a Luhn-valid card number). Any original letter or digit in
     the span keeps the finding, so a value that masking missed is still caught.
     """
-    covered = [False] * len(text)
-    surrogates = sorted(vault.surrogates(), key=len, reverse=True)
-    if surrogates:
-        for match in re.finditer("|".join(map(re.escape, surrogates)), text):
-            covered[match.start() : match.end()] = [True] * (match.end() - match.start())
+    covered = bytearray(len(text))
+    for match in SURROGATE.finditer(text):
+        candidate = match.group()
+        # The shape is greedy about a final run of digits; the surrogate issued may be a little shorter.
+        for trim in range(min(4, len(candidate))):
+            end = match.end() - trim
+            if vault.issued(text[match.start() : end]):
+                covered[match.start() : end] = b"\x01" * (end - match.start())
+                break
     left = []
     for finding in detect(text, ruleset, layers):
         if any(text[i].isalnum() and not covered[i] for i in range(finding.start, finding.end)):

@@ -154,18 +154,30 @@ function rangeCodes(lo: string, hi: string): number[] {
 
 const stripSeparators = (text: string): string => text.replace(/[ -]/g, "");
 
-/** UTF-16 index to code point index. */
-function codePoints(text: string, index: number): number {
+/**
+ * UTF-16 index to code point index, for every index of `text`, or null when the two are the same (no
+ * surrogate pairs). Built once per text: counting from the start for every finding is quadratic in a text
+ * with many findings.
+ */
+function codePointIndex(text: string): Uint32Array | null {
+  if (!/[\ud800-\udfff]/.test(text)) return null;
+  const at = new Uint32Array(text.length + 1);
   let count = 0;
-  for (let i = 0; i < index; i++) {
+  for (let i = 0; i < text.length; i++) {
+    at[i] = count;
     const c = text.charCodeAt(i);
-    if (c >= 0xd800 && c <= 0xdbff && i + 1 < index) {
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length) {
       const d = text.charCodeAt(i + 1);
-      if (d >= 0xdc00 && d <= 0xdfff) i += 1;
+      if (d >= 0xdc00 && d <= 0xdfff) {
+        // An index between the two halves of a pair counts the first half, as a lone surrogate would.
+        at[i + 1] = count + 1;
+        i += 1;
+      }
     }
     count += 1;
   }
-  return count;
+  at[text.length] = count;
+  return at;
 }
 
 export class Rule {
@@ -198,7 +210,7 @@ export class Rule {
   }
 
   /** Every span of `text` this rule holds, in code points, sorted and disjoint. */
-  spans(text: string): Span[] {
+  spans(text: string, index: Uint32Array | null = codePointIndex(text)): Span[] {
     const found: Span[] = [];
     const check = this.validator ? VALIDATORS[this.validator]! : null;
     for (const { regex, group } of this.patterns) {
@@ -213,7 +225,7 @@ export class Rule {
         if (check && !check(value)) continue;
         if (this.excepts.some((e) => e.test(value))) continue;
         if (this.exceptValues.size && this.exceptValues.has(stripSeparators(value))) continue;
-        found.push([codePoints(text, where[0]), codePoints(text, where[1])]);
+        found.push(index ? [index[where[0]]!, index[where[1]]!] : [where[0], where[1]]);
       }
     }
     found.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
@@ -264,24 +276,66 @@ export class Ruleset {
    */
   find(text: string): Finding[] {
     const all: Finding[] = [];
+    const index = codePointIndex(text);
     for (const rule of this.rules) {
       const action = this.categories[rule.category]!.action;
-      for (const [start, end] of rule.spans(text)) {
+      for (const [start, end] of rule.spans(text, index)) {
         all.push({ ruleId: rule.id, category: rule.category, action, aliases: rule.aliases, start, end });
       }
     }
-    const overlaps = (a: Finding, b: Finding): boolean => a.start < b.end && b.start < a.end;
-    const blocks = all
-      .filter((f) => f.action === "block")
-      .sort((a, b) => a.start - b.start || a.end - b.end || cmp(a.ruleId, b.ruleId));
-    const masks = all
-      .filter((f) => f.action !== "block" && !blocks.some((b) => overlaps(b, f)))
-      .sort((a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start || cmp(a.ruleId, b.ruleId));
-    const kept: Finding[] = [];
-    for (const f of masks) if (!kept.some((k) => overlaps(k, f))) kept.push(f);
-    kept.sort((a, b) => a.start - b.start);
-    return [...blocks, ...kept];
+    return resolve(all);
   }
+}
+
+/** The first index of sorted `values` holding a number greater than `x`. */
+function upperBound(values: number[], x: number): number {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (values[mid]! <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * Overlaps resolved in one pass over sorted spans, as `resolve` in the Python guard does. Comparing every
+ * pair took most of a minute for a pasted list of 30,000 addresses; a slow request is a way to stall a caller.
+ */
+export function resolve(all: Finding[]): Finding[] {
+  const blocks = all
+    .filter((f) => f.action === "block")
+    .sort((a, b) => a.start - b.start || a.end - b.end || cmp(a.ruleId, b.ruleId));
+  // The block spans as a sorted, disjoint union, so "overlaps some block" is one binary search.
+  const unionStarts: number[] = [];
+  const unionEnds: number[] = [];
+  for (const b of blocks) {
+    const last = unionEnds.length - 1;
+    if (last >= 0 && b.start < unionEnds[last]!) unionEnds[last] = Math.max(unionEnds[last]!, b.end);
+    else {
+      unionStarts.push(b.start);
+      unionEnds.push(b.end);
+    }
+  }
+  const underBlock = (f: Finding): boolean => {
+    const i = upperBound(unionEnds, f.start);
+    return i < unionStarts.length && unionStarts[i]! < f.end;
+  };
+  const masks = all
+    .filter((f) => f.action !== "block" && !underBlock(f))
+    .sort((a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start || cmp(a.ruleId, b.ruleId));
+  // Longest first; what is kept stays sorted and disjoint, so only its two neighbours can overlap a newcomer.
+  const keptStarts: number[] = [];
+  const kept: Finding[] = [];
+  for (const f of masks) {
+    const i = upperBound(keptStarts, f.start);
+    if (i > 0 && kept[i - 1]!.end > f.start) continue;
+    if (i < kept.length && kept[i]!.start < f.end) continue;
+    keptStarts.splice(i, 0, f.start);
+    kept.splice(i, 0, f);
+  }
+  return [...blocks, ...kept];
 }
 
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

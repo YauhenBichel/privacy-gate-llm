@@ -16,6 +16,7 @@ What is left for masking is sorted and disjoint.
 from __future__ import annotations
 
 import time
+from bisect import bisect_right
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
@@ -79,6 +80,12 @@ def _add(timings: dict[str, float] | None, layer: str, started: float) -> None:
 
 
 def resolve(findings: list[Finding], ruleset: Ruleset) -> list[Finding]:
+    """Overlaps resolved as the module text says. Spans are never empty (the rules and `detect` see to that).
+
+    One pass over sorted spans, not every pair: a text with 30,000 findings (a pasted address list) is
+    resolved in the time it takes to sort them. A request that takes minutes is a way to stall the caller.
+    """
+
     def is_block(f: Finding) -> bool:
         return ruleset.categories[f.category].action == "block"
 
@@ -87,15 +94,31 @@ def resolve(findings: list[Finding], ruleset: Ruleset) -> list[Finding]:
         (f.category, f.rule_id, f.start, f.end): f for f in sorted(findings, key=lambda f: f.layer == "L1")
     }
     blocks = sorted((f for f in unique.values() if is_block(f)), key=lambda f: (f.start, f.end, f.rule_id))
-    masks = [
-        f
-        for f in unique.values()
-        if not is_block(f) and not any(b.start < f.end and f.start < b.end for b in blocks)
-    ]
+    # The block spans as a sorted, disjoint union, so "overlaps some block" is one binary search.
+    union_starts: list[int] = []
+    union_ends: list[int] = []
+    for b in blocks:
+        if union_ends and b.start < union_ends[-1]:
+            union_ends[-1] = max(union_ends[-1], b.end)
+        else:
+            union_starts.append(b.start)
+            union_ends.append(b.end)
+
+    def under_block(f: Finding) -> bool:
+        i = bisect_right(union_ends, f.start)
+        return i < len(union_starts) and union_starts[i] < f.end
+
+    masks = [f for f in unique.values() if not is_block(f) and not under_block(f)]
     masks.sort(key=lambda f: (-(f.end - f.start), f.start, f.rule_id))
+    # Longest first; what is kept stays sorted and disjoint, so only its two neighbours can overlap a newcomer.
+    kept_starts: list[int] = []
     kept: list[Finding] = []
     for f in masks:
-        if not any(k.start < f.end and f.start < k.end for k in kept):
-            kept.append(f)
-    kept.sort(key=lambda f: f.start)
+        i = bisect_right(kept_starts, f.start)
+        if i > 0 and kept[i - 1].end > f.start:
+            continue
+        if i < len(kept) and kept[i].start < f.end:
+            continue
+        kept_starts.insert(i, f.start)
+        kept.insert(i, f)
     return blocks + kept
