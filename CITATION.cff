@@ -9,8 +9,8 @@ license: Apache-2.0
 repository-code: "https://github.com/YauhenBichel/privacy-gate-llm"
 url: "https://yauhenbichel.github.io/privacy-gate-llm/"
 repository-artifact: "https://pypi.org/project/privacy-gate-llm/"
-version: 1.0.1
-date-released: 2026-11-20
+version: 1.1.0
+date-released: 2026-11-26
 keywords:
   - privacy
   - pii-detection

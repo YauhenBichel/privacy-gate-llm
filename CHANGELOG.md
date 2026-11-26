@@ -2,7 +2,7 @@
 
 All notable changes. The head file has its own history in `docs/JOURNAL.md`; a new head is a new minor version.
 
-## Unreleased
+## 1.1.0 — 2026-11-26
 
 Renamed on PyPI: the distribution is now **`privacy-gate-llm`**, the same name as the repository, without the
 MoleCare brand. 1.0.0 and 1.0.1 stay on PyPI as `molecare-privacy-gate`; later releases are published as

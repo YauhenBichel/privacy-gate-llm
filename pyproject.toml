@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "privacy-gate-llm"
-version = "1.0.1"
+version = "1.1.0"
 description = "A very small model that catches health data, credentials and personal data written as ordinary English, which pattern rules cannot see. bge-m3 plus 1024 weights. A second gate that may only ever add a hold."
 readme = "README.md"
 license = "Apache-2.0"
