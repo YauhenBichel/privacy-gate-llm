@@ -108,6 +108,31 @@ encoded forms (base64, hex, URL encoding, escapes).
 | L7 | Files already uploaded and referenced by id | upload endpoints are not forwarded by default; references are audited |
 | L8 | The guard sees everything, so it is a target | loopback only, no content in logs, pinned dependencies and actions, signed releases |
 
+**What the pattern layer (L0 and L1, the `lite` profile) does not see.** These were measured, and left on
+purpose because each fix would hold ordinary text or needs a detector that is not a pattern:
+
+- names, addresses and health details in free prose (that is the head's and the entity layers' job);
+- a card or phone number typed into separate fields, or a list of digits: digit-only values are not put
+  together across fields, because one list of years in ten passes the Luhn check;
+- an e-mail address with a line break before the `@`, numbers spelled in words, an NHS number with no label,
+  bare 10-digit phone numbers, IP addresses written as one integer, hex or octal;
+- public and documentation IP addresses, reserved example domains, published test cards and numbers with a wrong
+  checksum: not personal data;
+- a token cut by a space or a line break, a passphrase with spaces, a short password in prose without `=` or `:`.
+
+The JavaScript package has L1 only: no decoding (L0), no walk over a request body, no field names, no masking.
+
+**Sessions and unmasking.**
+
+- `Guard.protect()` without `caller` and `session` uses one shared vault for every request in the process, so
+  one user's reply can be unmasked with another user's values. Pass both in anything that serves more than one
+  person; the guard warns once (`RuntimeWarning`) when it masks without them. A later major version may
+  require them.
+- A surrogate is not a secret. A person who types a surrogate issued earlier in the same session gets the real
+  value back in the reply, as the design intends: it is their own session's value. Do not show one session's
+  surrogates to another party and then unmask that party's text with the first session's vault.
+- A surrogate inside a longer word or number is not replaced. Refusing to unmask is the safe direction.
+
 **Fail closed.** If the rules or the policy cannot be loaded, or an input is too
 large or too deep to scan in full, or the engine raises, the request is refused.
 Nothing the guard did not finish reading is sent.

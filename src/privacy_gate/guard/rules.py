@@ -117,9 +117,10 @@ class Rule:
     except_values: frozenset[str] = frozenset()
     aliases: tuple[str, ...] = ()
 
-    def spans(self, text: str) -> list[tuple[int, int]]:
-        """Every span of `text` this rule holds, sorted and disjoint."""
-        found: list[tuple[int, int]] = []
+    def matches(self, text: str) -> list[tuple[int, int, int, int]]:
+        """Every match as (match start, match end, value start, value end), unmerged. The match is wider than
+        the value when the pattern reads a label before it."""
+        found: list[tuple[int, int, int, int]] = []
         check = VALIDATORS[self.validator] if self.validator else None
         for pattern in self.patterns:
             for match in pattern.compiled.finditer(text):
@@ -133,7 +134,12 @@ class Rule:
                     continue
                 if self.except_values and _strip_separators(value) in self.except_values:
                     continue
-                found.append((start, end))
+                found.append((match.start(), match.end(), start, end))
+        return found
+
+    def spans(self, text: str) -> list[tuple[int, int]]:
+        """Every span of `text` this rule holds, sorted and disjoint."""
+        found = [(start, end) for _, _, start, end in self.matches(text)]
         found.sort(key=lambda s: (s[0], -s[1]))
         merged: list[tuple[int, int]] = []
         for start, end in found:

@@ -155,6 +155,12 @@ See [`integrations/`](integrations/).
 already have) and the guard's pattern rules (layer L1), with no runtime dependencies. It passes the same
 conformance suite as the Python engine. See [`js/`](js/README.md).
 
+**What the pattern rules cover, and what they do not.** The rules (and the guard's `lite` profile, which runs
+only them) find values with a shape: keys, cards, IBANs, e-mail addresses, phone numbers, ids with a label. They
+do not find names, addresses or health details in free prose; that is what the head is for. The JavaScript
+package has the rules only, without the Python guard's decoding and masking. The measured limits are listed in
+[`SECURITY.md`](SECURITY.md#the-privacy-guard-threat-model).
+
 **It is not ready to ship.** 247 examples written by one person are
 enough to choose an architecture, not enough to set a threshold that decides what
 leaves a machine holding real patient data. See the end of `docs/JOURNAL.md` for

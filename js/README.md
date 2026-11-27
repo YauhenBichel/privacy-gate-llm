@@ -18,6 +18,11 @@ through a bundler. It ships two things:
    assignments and URLs, payment cards (Luhn), IBANs (mod 97), NHS numbers (mod 11), US SSNs, e-mail, phone
    numbers, private IPs, home paths, patient ids and dates of birth. It reports spans, never values.
 
+**What this package does not do.** The rules read the text as written. A value hidden by base64, `%40`, HTML
+entities, zero-width characters or look-alike letters, or split across JSON fields, is not found; names,
+addresses and health details in prose are the head's job, not the rules'. There is no masking or unmasking
+here. The Python `Guard` does those (see [below](#find-patterns)).
+
 Both are the same files the Python package (`pip install privacy-gate-llm`) uses, byte for byte, with the same
 SHA-256 that `privacy-gate info` prints.
 

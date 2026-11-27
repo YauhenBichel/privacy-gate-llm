@@ -10,9 +10,12 @@
 The order of a decision:
 1. Walk the body (`walker`): every leaf as ``key: value``, numbers too, binary blocks held, caps fail closed.
 2. Strip ``[[send-as-is:...]]`` markers from string values and note the categories they name.
-3. Detect (`detect`): L1 on the text, L0 views, and L2/L3 detectors when the profile has them.
+3. Detect (`detect`): L1 on the text, L0 views, and L2/L3 detectors when the profile has them. Then read
+   what one leaf cannot show (`fields`): a field whose name says its value is a secret or a phone number,
+   and a value split over neighbouring leaves, which is held because it cannot be masked in one place.
 4. Decide each finding: the policy's action for the category and provider; an override or an allowlisted
-   value may turn *mask* into *allow*, never *block* into anything.
+   value may turn *mask* into *allow*, never *block* into anything. A value to mask that stands directly
+   against an accented letter or a digit of another script is held: the pattern may have found only part.
 5. Four or more distinct maskable categories in one value fire PG-COMBO-001: a block in the standard and full
    profiles, a shadow report in lite.
 6. Any block -> refuse (or ``local`` when the policy says so); else mask and re-scan the masked text, and
@@ -21,6 +24,10 @@ The order of a decision:
 Fail closed: if the rules, the policy or a named overlay cannot be loaded, every call returns a block with the
 reason. If anything raises while deciding, the call returns a block (architecture review R9). The decision
 never carries a value, and an exception's message is not copied into it, since it might quote one.
+
+Sessions: surrogates live in the vault named by ``caller`` and ``session``. A caller that passes neither
+shares one vault with every other such caller of this guard, so one person's reply could be unmasked with
+another's values; `protect` warns once when it masks into that shared vault. Pass both.
 
 ``on_block: local`` returns the original body for the caller to send to its local model; the caller must
 strip provider credentials (Authorization, x-api-key, anthropic-beta) first (review R18). That is the
@@ -34,6 +41,8 @@ import hashlib
 import json
 import re
 import time
+import unicodedata
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -41,6 +50,7 @@ from typing import Any
 
 from .audit import Decision
 from .detect import Detector, Finding, detect
+from .fields import joined_findings, key_findings
 from .mask import mask_text, residual
 from .normalize import DecodeLimitError
 from .policy import Policy, PolicyError, parse_overrides, strip_markers
@@ -63,6 +73,39 @@ from .walker import (
 
 Hasher = Callable[[str, str], str]
 _PLAIN_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_-]{0,63}")
+#: Scripts whose letters join an ASCII word or number without a space. A CJK neighbour is ordinary text.
+_JOINING_SCRIPTS = ("LATIN", "CYRILLIC", "GREEK", "FULLWIDTH LATIN")
+_shared_vault_warned = False
+
+
+def _warn_shared_vault() -> None:
+    global _shared_vault_warned
+    if _shared_vault_warned:
+        return
+    _shared_vault_warned = True
+    warnings.warn(
+        "privacy_gate: protect() masked a value without caller= and session=, so its surrogate went into the "
+        "vault shared by every such call. Pass both, or one user's reply can be unmasked with another's "
+        "values. A later major version will require them.",
+        RuntimeWarning,
+        stacklevel=4,
+    )
+
+
+def _joins(ch: str) -> bool:
+    if ch.isascii():
+        return False
+    if ch.isdecimal():
+        return True
+    return ch.isalpha() and unicodedata.name(ch, "").startswith(_JOINING_SCRIPTS)
+
+
+def _partial(text: str, finding: Finding) -> bool:
+    """True when the span stands directly against a letter or digit the ASCII patterns do not read: the
+    value may go on past the span (``/home/jos`` before ``é``), and masking the span would send the rest."""
+    before = text[finding.start - 1] if finding.start > 0 else ""
+    after = text[finding.end] if finding.end < len(text) else ""
+    return bool(before and _joins(before)) or bool(after and _joins(after))
 
 
 @dataclass
@@ -206,9 +249,16 @@ class Guard:
                     requested |= named
                     text = text[: unit.value_offset] + stripped
                     rewrites[unit.path] = stripped
-            per_unit.append(
-                (unit, text, [(f, "") for f in detect(text, rules, layers, self.detectors, timings)])
-            )
+            found = detect(text, rules, layers, self.detectors, timings)
+            if "L1" in layers:
+                found += key_findings(unit, text, rules, found)
+            per_unit.append((unit, text, [(f, "") for f in found]))
+
+        joined = []
+        if "L1" in layers and len(per_unit) > 1:
+            started = time.perf_counter()
+            joined = joined_findings([(u, t, [f for f, _ in items]) for u, t, items in per_unit], rules)
+            timings["L1"] = timings.get("L1", 0.0) + (time.perf_counter() - started) * 1000
 
         allowed_overrides = {
             c for c in requested if c in rules.categories and rules.categories[c].overridable
@@ -235,6 +285,8 @@ class Guard:
                 if action == "mask" and (in_key or not unit.is_string):
                     # A key cannot be masked in place, and a number would change type: hold instead.
                     action = "block"
+                if action == "mask" and _partial(text, finding):
+                    action = "block"
                 acted.append((finding, value))
                 _note(decision, finding.rule_id, finding.aliases, finding.category, unit.path, in_key)
                 if action == "block":
@@ -251,6 +303,15 @@ class Guard:
                     decision.shadow_rules.append(combo)
             if masks:
                 to_mask.append((unit, text, masks))
+
+        for hit in joined:
+            category = hit.rule.category
+            if self._action(category, hit.value, provider, allowed_overrides) == "allow":
+                continue
+            where = per_unit[hit.leaf][0].path
+            acted.append((Finding(category, hit.rule.id, hit.rule.aliases, 0, 0, "L1"), hit.value))
+            _note(decision, hit.rule.id, hit.rule.aliases, category, where, False)
+            block_hits.append((category, hit.rule.id, hit.rule.aliases, where, False))
 
         decision.override = sorted(overridden)
         if hasher is not None:
@@ -286,6 +347,8 @@ class Guard:
             decision.action = "allow"
             return Protected(decision, _rewritten(body, rewrites))
 
+        if not caller and session == "default":
+            _warn_shared_vault()
         vault = self.store.vault(caller, session)
         for unit, text, masks in to_mask:
             offset = unit.value_offset

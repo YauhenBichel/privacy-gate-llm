@@ -32,7 +32,8 @@ export function luhn(text: string): boolean {
 
 /** IBAN: known country, that country's length, and ISO 7064 mod 97-10 equal to 1. */
 export function iban_mod97(text: string): boolean {
-  const compact = text.replace(/\s+/g, "").toUpperCase();
+  // Python's str.isspace() set for the characters a match can hold (the pattern allows ASCII space only).
+  const compact = text.replace(/[\t\n\v\f\r .-]+/g, "").toUpperCase();
   if (compact.length < 5 || !/^[A-Z0-9]+$/.test(compact)) return false;
   if (IBAN_LENGTHS[compact.slice(0, 2)] !== compact.length) return false;
   const rearranged = compact.slice(4) + compact.slice(0, 4);
@@ -67,14 +68,16 @@ export function us_ssn_area(text: string): boolean {
   return group !== 0 && serial !== 0;
 }
 
-/** Python's IPv4Address parser: four decimal octets, 0-255, at most three digits, no leading zero. */
+/**
+ * Four decimal octets, 0-255, at most three digits each. Brackets and spaces around the dots
+ * (`192[.]168[.]1[.]20`) are dropped and a zero-padded octet is decimal, as in the Python validator.
+ */
 function parseIPv4(text: string): number[] | null {
-  const parts = text.split(".");
+  const parts = text.replace(/[[\]() ]/g, "").split(".");
   if (parts.length !== 4) return null;
   const octets: number[] = [];
   for (const part of parts) {
     if (!/^[0-9]{1,3}$/.test(part)) return null;
-    if (part.length > 1 && part[0] === "0") return null;
     const value = Number(part);
     if (value > 255) return null;
     octets.push(value);
@@ -131,7 +134,7 @@ function parseIPv6(text: string): number[] | null {
 /** A private (RFC 1918), link-local or CGNAT IPv4 address; a last octet of 0 names a network, not a machine. */
 export function private_ipv4(text: string): boolean {
   const o = parseIPv4(text);
-  if (o === null || text.slice(text.lastIndexOf(".") + 1) === "0") return false;
+  if (o === null || o[3] === 0) return false;
   const [a, b] = o as [number, number];
   return (
     a === 10 ||
@@ -157,6 +160,11 @@ export function phone_digits(text: string): boolean {
   return new Set(number).size > 1;
 }
 
+/** At least one ASCII letter and one digit: a stated password, not the next word of the sentence. */
+export function letter_and_digit(text: string): boolean {
+  return /[A-Za-z]/.test(text) && /[0-9]/.test(text);
+}
+
 export const VALIDATORS: Readonly<Record<string, (text: string) => boolean>> = {
   luhn,
   iban_mod97,
@@ -165,4 +173,5 @@ export const VALIDATORS: Readonly<Record<string, (text: string) => boolean>> = {
   private_ipv4,
   private_ipv6,
   phone_digits,
+  letter_and_digit,
 };

@@ -122,7 +122,7 @@ def luhn(text: str) -> bool:
 
 def iban_mod97(text: str) -> bool:
     """IBAN: known country, that country's length, and ISO 7064 mod 97-10 equal to 1."""
-    compact = "".join(text.split()).upper()
+    compact = "".join(ch for ch in text if not ch.isspace() and ch not in ".-").upper()
     if len(compact) < 5 or not compact.isascii() or not compact.isalnum():
         return False
     if IBAN_LENGTHS.get(compact[:2]) != len(compact):
@@ -180,13 +180,18 @@ _PRIVATE_V6 = tuple(
 
 def private_ipv4(text: str) -> bool:
     """An address inside a private, link-local or CGNAT range. A last octet of 0 is a network address
-    (`10.0.0.0/8` in a firewall rule or a README), which names a range, not a machine, so it is not held."""
-    try:
-        address = ipaddress.IPv4Address(text)
-    except ValueError:
+    (`10.0.0.0/8` in a firewall rule or a README), which names a range, not a machine, so it is not held.
+
+    The text is read the way a person reads it, not the way a strict parser does: brackets and spaces
+    around the dots (`192[.]168[.]1[.]20`) are dropped and a zero-padded octet (`001`) is decimal. A
+    parser that refused those would let the same address through unseen."""
+    parts = "".join(ch for ch in text if ch not in "[]() ").split(".")
+    if len(parts) != 4 or not all(part.isascii() and part.isdigit() and len(part) <= 3 for part in parts):
         return False
-    if text.rsplit(".", 1)[-1] == "0":
+    octets = [int(part) for part in parts]
+    if max(octets) > 255 or octets[3] == 0:
         return False
+    address = ipaddress.IPv4Address(".".join(map(str, octets)))
     return any(address in network for network in _PRIVATE_V4)
 
 
@@ -208,6 +213,13 @@ def phone_digits(text: str) -> bool:
     return len(set(number)) > 1
 
 
+def letter_and_digit(text: str) -> bool:
+    """A value with at least one ASCII letter and one digit: what separates a stated password
+    (`Zx9qW8e7`) from the next word of the sentence (`automatically`)."""
+    has_letter = any("a" <= ch <= "z" or "A" <= ch <= "Z" for ch in text)
+    return has_letter and any("0" <= ch <= "9" for ch in text)
+
+
 VALIDATORS: dict[str, Callable[[str], bool]] = {
     "luhn": luhn,
     "iban_mod97": iban_mod97,
@@ -216,4 +228,5 @@ VALIDATORS: dict[str, Callable[[str], bool]] = {
     "private_ipv4": private_ipv4,
     "private_ipv6": private_ipv6,
     "phone_digits": phone_digits,
+    "letter_and_digit": letter_and_digit,
 }

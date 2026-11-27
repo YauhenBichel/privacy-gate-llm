@@ -3,8 +3,8 @@
  "note": "Generated from rules/privacy-v2.yaml by scripts/build_rules.py. Do not edit by hand. For each case, the rule alone, run on `text` with no normalisation, must report exactly `spans` ([start, end) in Unicode code points, sorted, disjoint). `kind: pass` cases report none.",
  "ruleset": {
   "id": "privacy-v2",
-  "version": "2.1.0",
-  "sha256": "62d79118f1ec5c1e778aae53f8930161c10a5b1c5dd839a985800e82cce9c33d"
+  "version": "2.2.0",
+  "sha256": "263c5a56e9f14eb5c3f94d8d68465d2be0121008091bb1f2b63294626ed4e9c0"
  },
  "cases": [
   {
@@ -330,6 +330,51 @@
   {
    "rule": "PG-SECRET-003",
    "category": "secret",
+   "kind": "fail",
+   "text": "password = 'NOTAREAL&example-value'",
+   "spans": [
+    [
+     12,
+     34
+    ]
+   ],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
+   "kind": "fail",
+   "text": "my_old_password_for_the_staging_database_v2: hunter2correcthorsebattery",
+   "spans": [
+    [
+     45,
+     71
+    ]
+   ],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
+   "kind": "fail",
+   "text": "PASSPHRASE=hunter2correcthorsebattery",
+   "spans": [
+    [
+     11,
+     37
+    ]
+   ],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
    "kind": "pass",
    "text": "DB_PASSWORD=${DB_PASSWORD}",
    "spans": [],
@@ -386,6 +431,104 @@
    "aliases": [
     "PRIV004"
    ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
+   "kind": "pass",
+   "text": "password = self.config.password",
+   "spans": [],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
+   "kind": "pass",
+   "text": "DB_PASSWORD=%DB_PASSWORD%",
+   "spans": [],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
+   "kind": "pass",
+   "text": "password: ************",
+   "spans": [],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-003",
+   "category": "secret",
+   "kind": "pass",
+   "text": "PWD=/Users/Shared/projects/app",
+   "spans": [],
+   "aliases": [
+    "PRIV004"
+   ]
+  },
+  {
+   "rule": "PG-SECRET-006",
+   "category": "secret",
+   "kind": "fail",
+   "text": "the password is Zx9qW8e7R6t5Y4u",
+   "spans": [
+    [
+     16,
+     31
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-SECRET-006",
+   "category": "secret",
+   "kind": "fail",
+   "text": "old passcode was \"hunter2-not-real\"",
+   "spans": [
+    [
+     18,
+     34
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-SECRET-006",
+   "category": "secret",
+   "kind": "pass",
+   "text": "the password is automatically rotated",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-SECRET-006",
+   "category": "secret",
+   "kind": "pass",
+   "text": "the password is stored in the vault",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-SECRET-006",
+   "category": "secret",
+   "kind": "pass",
+   "text": "a password is required",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-SECRET-006",
+   "category": "secret",
+   "kind": "pass",
+   "text": "the password is ${DB_PASSWORD}",
+   "spans": [],
+   "aliases": []
   },
   {
    "rule": "PG-SECRET-004",
@@ -529,6 +672,62 @@
   {
    "rule": "PG-CARD-001",
    "category": "card",
+   "kind": "fail",
+   "text": "card 4000.1234.5678.9017",
+   "spans": [
+    [
+     5,
+     24
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-CARD-001",
+   "category": "card",
+   "kind": "fail",
+   "text": "card 4000_1234_5678_9017 or 4000  1234  5678  9017",
+   "spans": [
+    [
+     5,
+     24
+    ],
+    [
+     28,
+     50
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-CARD-001",
+   "category": "card",
+   "kind": "fail",
+   "text": "card 4000-1234 5678.9017",
+   "spans": [
+    [
+     5,
+     24
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-CARD-001",
+   "category": "card",
+   "kind": "fail",
+   "text": "card 4 0 0 0 1 2 3 4 5 6 7 8 9 0 1 7",
+   "spans": [
+    [
+     5,
+     36
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-CARD-001",
+   "category": "card",
    "kind": "pass",
    "text": "4111 1111 1111 1111 is the test Visa",
    "spans": [],
@@ -607,6 +806,22 @@
    "aliases": []
   },
   {
+   "rule": "PG-CARD-001",
+   "category": "card",
+   "kind": "pass",
+   "text": "card 4000.1234.5678.9010",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-CARD-001",
+   "category": "card",
+   "kind": "pass",
+   "text": "e is 2.718281828459045",
+   "spans": [],
+   "aliases": []
+  },
+  {
    "rule": "PG-PATIENT-001",
    "category": "patient_or_national_id",
    "kind": "fail",
@@ -681,6 +896,46 @@
      17
     ]
    ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-001",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "pt id 8841234",
+   "spans": [
+    [
+     6,
+     13
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-001",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "hospital number Z123456",
+   "spans": [
+    [
+     16,
+     23
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-001",
+   "category": "patient_or_national_id",
+   "kind": "pass",
+   "text": "record no. 00451234 failed to import",
+   "spans": [],
    "aliases": [
     "PRIV002"
    ]
@@ -838,6 +1093,150 @@
   {
    "rule": "PG-PATIENT-002",
    "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "date of birth: 3 April 1975",
+   "spans": [
+    [
+     15,
+     27
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "DOB: 3rd Apr 1975 and d.o.b. 03/04/75",
+   "spans": [
+    [
+     5,
+     17
+    ],
+    [
+     29,
+     37
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "DoB: 19750403",
+   "spans": [
+    [
+     5,
+     13
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "DOB: 03 04 1975",
+   "spans": [
+    [
+     5,
+     15
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "born 03.04.1975 in Leeds",
+   "spans": [
+    [
+     5,
+     15
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "born on the 3rd of April, 1975",
+   "spans": [
+    [
+     12,
+     30
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "date_of_birth: April 3, 1975",
+   "spans": [
+    [
+     15,
+     28
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "aged 49, born April 1975",
+   "spans": [
+    [
+     14,
+     24
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "pass",
+   "text": "the newborn 12/05/2020 cohort",
+   "spans": [],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
+   "kind": "pass",
+   "text": "the DOB may be missing in 2020 exports",
+   "spans": [],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-PATIENT-002",
+   "category": "patient_or_national_id",
    "kind": "pass",
    "text": "the dob field is a Date, not a string",
    "spans": [],
@@ -913,6 +1312,51 @@
   {
    "rule": "PG-NATID-001",
    "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "NHS number 94 3476 5919",
+   "spans": [
+    [
+     11,
+     23
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-NATID-001",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "NHS number is 943  476  5919",
+   "spans": [
+    [
+     14,
+     28
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-NATID-001",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "NHS number: 9 4 3 4 7 6 5 9 1 9",
+   "spans": [
+    [
+     12,
+     31
+    ]
+   ],
+   "aliases": [
+    "PRIV002"
+   ]
+  },
+  {
+   "rule": "PG-NATID-001",
+   "category": "patient_or_national_id",
    "kind": "pass",
    "text": "the NHS app login flow has a bug",
    "spans": [],
@@ -951,6 +1395,52 @@
      15
     ]
    ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-NATID-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "SSN 123 45 6789 and ssn: 123.45.6789",
+   "spans": [
+    [
+     4,
+     15
+    ],
+    [
+     25,
+     36
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-NATID-002",
+   "category": "patient_or_national_id",
+   "kind": "fail",
+   "text": "social security number 123456789",
+   "spans": [
+    [
+     23,
+     32
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-NATID-002",
+   "category": "patient_or_national_id",
+   "kind": "pass",
+   "text": "ticket 123 45 6789 is closed",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-NATID-002",
+   "category": "patient_or_national_id",
+   "kind": "pass",
+   "text": "ssn 666 12 3456",
+   "spans": [],
    "aliases": []
   },
   {
@@ -1078,6 +1568,139 @@
      35
     ]
    ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "write to ana@m\u00fcnchen-klinik.internal or a\u0430na.duarte@northgate.internal",
+   "spans": [
+    [
+     9,
+     36
+    ],
+    [
+     40,
+     70
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "wrapped ana.duarte@\nnorthgate.internal by the mail client",
+   "spans": [
+    [
+     8,
+     38
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "punycode ana@northgate.xn--p1ai",
+   "spans": [
+    [
+     9,
+     31
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "\"ana duarte\"@northgate.internal",
+   "spans": [
+    [
+     0,
+     31
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "literal ana.duarte@[192.0.2.9]",
+   "spans": [
+    [
+     8,
+     30
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "spelled ana.duarte[at]northgate[dot]internal or ana.duarte (at) northgate.internal",
+   "spans": [
+    [
+     8,
+     44
+    ],
+    [
+     48,
+     82
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "fail",
+   "text": "spelled ana.duarte at northgate dot co dot uk",
+   "spans": [
+    [
+     8,
+     45
+    ]
+   ],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "pass",
+   "text": "look at this dot matrix printer",
+   "spans": [],
+   "aliases": [
+    "PRIV005"
+   ]
+  },
+  {
+   "rule": "PG-EMAIL-001",
+   "category": "email",
+   "kind": "pass",
+   "text": "import flask\n@app.route('/x')",
+   "spans": [],
    "aliases": [
     "PRIV005"
    ]
@@ -1223,6 +1846,19 @@
     [
      12,
      28
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-PHONE-001",
+   "category": "phone",
+   "kind": "fail",
+   "text": "office (020) 7946 0123",
+   "spans": [
+    [
+     7,
+     22
     ]
    ],
    "aliases": []
@@ -1378,6 +2014,36 @@
   {
    "rule": "PG-IBAN-001",
    "category": "iban",
+   "kind": "fail",
+   "text": "iban gb82 west 1234 5698 7654 32",
+   "spans": [
+    [
+     5,
+     32
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-IBAN-001",
+   "category": "iban",
+   "kind": "fail",
+   "text": "IBAN GB82\nWEST 1234 5698 7654 32 and GB82.WEST.1234.5698.7654.32",
+   "spans": [
+    [
+     5,
+     32
+    ],
+    [
+     37,
+     64
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-IBAN-001",
+   "category": "iban",
    "kind": "pass",
    "text": "IBAN: GB82 WEST 1234 5698 7654 33",
    "spans": [],
@@ -1465,6 +2131,36 @@
   {
    "rule": "PG-IP-001",
    "category": "private_ip",
+   "kind": "fail",
+   "text": "host 192.168.001.020",
+   "spans": [
+    [
+     5,
+     20
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-IP-001",
+   "category": "private_ip",
+   "kind": "fail",
+   "text": "host 192[.]168[.]1[.]20 or 192 . 168 . 1 . 20",
+   "spans": [
+    [
+     5,
+     23
+    ],
+    [
+     27,
+     45
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-IP-001",
+   "category": "private_ip",
    "kind": "pass",
    "text": "docs use 192.0.2.10",
    "spans": [],
@@ -1499,6 +2195,22 @@
    "category": "private_ip",
    "kind": "pass",
    "text": "8.8.8.8 is public",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-IP-001",
+   "category": "private_ip",
+   "kind": "pass",
+   "text": "docs use 192[.]0[.]2[.]10",
+   "spans": [],
+   "aliases": []
+  },
+  {
+   "rule": "PG-IP-001",
+   "category": "private_ip",
+   "kind": "pass",
+   "text": "allow 010.000.000.000/8",
    "spans": [],
    "aliases": []
   },
@@ -1579,6 +2291,32 @@
     [
      9,
      12
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-PATH-001",
+   "category": "home_path",
+   "kind": "fail",
+   "text": "path \\\\srv\\home\\jdoe\\x",
+   "spans": [
+    [
+     16,
+     20
+    ]
+   ],
+   "aliases": []
+  },
+  {
+   "rule": "PG-PATH-001",
+   "category": "home_path",
+   "kind": "fail",
+   "text": "path ~jdoe/x",
+   "spans": [
+    [
+     6,
+     10
     ]
    ],
    "aliases": []

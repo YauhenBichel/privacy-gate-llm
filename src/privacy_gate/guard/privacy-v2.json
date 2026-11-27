@@ -1,8 +1,8 @@
 {
   "schema": "privacy-gate-rules/2",
   "id": "privacy-v2",
-  "version": "2.1.0",
-  "updated": "2026-11-20",
+  "version": "2.2.0",
+  "updated": "2026-11-26",
   "seeded_from": {
     "repo": "llm-harness",
     "pr": 32,
@@ -201,10 +201,22 @@
       "category": "secret",
       "patterns": [
         {
-          "regex": "(?i)\\b[a-z0-9_]*(?:password|passwd|secret|api_?key|access_?token|auth_?token|private_?key)[a-z0-9_]*[\"']?\\s*[:=]\\s*[\"']?([A-Za-z0-9/+_-]{12,})",
+          "regex": "(?i)(?:password|passwd|passphrase|secret|api_?key|access_?token|auth_?token|private_?key)[a-z0-9_]{0,128}[\"']?\\s*[:=]\\s*[\"']?([A-Za-z0-9/+_!@&^~-]{12,})",
           "group": 1
         }
       ]
+    },
+    {
+      "id": "PG-SECRET-006",
+      "title": "Password stated in a sentence",
+      "category": "secret",
+      "patterns": [
+        {
+          "regex": "(?i)\\b(?:password|passwd|passphrase|passcode)\\s+(?:is|was)\\s*:?\\s*[\"']?([A-Za-z0-9/+_!@&^~#$%*?-]{8,64})",
+          "group": 1
+        }
+      ],
+      "validator": "letter_and_digit"
     },
     {
       "id": "PG-SECRET-004",
@@ -247,8 +259,9 @@
       "title": "Payment card number",
       "category": "card",
       "patterns": [
-        "\\b[2-6](?:\\d[ -]?){11,17}\\d\\b",
-        "\\b[2-6](?:\\d[ -]?){11,17}?\\d\\b"
+        "\\b[2-6][ -]?(?:\\d[ -]?){11,17}\\d\\b",
+        "\\b[2-6][ -]?(?:\\d[ -]?){11,17}?\\d\\b",
+        "\\b[2-6]\\d{3}(?:[ ._-]{1,2}\\d{4}){3}\\b"
       ],
       "validator": "luhn",
       "except_values": [
@@ -277,7 +290,7 @@
       "category": "patient_or_national_id",
       "patterns": [
         {
-          "regex": "(?i)\\b(?:mrn|patient[\\s_-]*(?:id|no|number|#)|medical[\\s_-]*record[\\s_-]*(?:id|no|number|#)?)[\"']?\\W{0,5}([A-Za-z]{0,3}\\d{4,})",
+          "regex": "(?i)\\b(?:mrn|(?:patient|pt)[\\s_-]*(?:id|no|number|#)|hospital[\\s_-]*(?:id|no|number|#)|medical[\\s_-]*record[\\s_-]*(?:id|no|number|#)?)[\"']?\\W{0,5}([A-Za-z]{0,3}\\d{4,})",
           "group": 1
         }
       ]
@@ -291,7 +304,19 @@
       "category": "patient_or_national_id",
       "patterns": [
         {
-          "regex": "(?i)\\b(?:date[\\s_-]*of[\\s_-]*birth|birth[\\s_-]*date|dob)[\"']?\\W{0,5}(\\d{1,4}[-/.]\\d{1,2}[-/.]\\d{1,4})",
+          "regex": "(?i)\\b(?:date[\\s_-]*of[\\s_-]*birth|birth[\\s_-]*date|d\\.?o\\.?b|born(?:\\s+on)?(?:\\s+the)?)[\"']?\\W{0,5}(\\d{1,4}[-/. ]\\d{1,2}[-/. ]\\d{1,4})",
+          "group": 1
+        },
+        {
+          "regex": "(?i)\\b(?:date[\\s_-]*of[\\s_-]*birth|birth[\\s_-]*date|d\\.?o\\.?b|born(?:\\s+on)?(?:\\s+the)?)[\"']?\\W{0,5}((?:19|20)\\d{6})\\b",
+          "group": 1
+        },
+        {
+          "regex": "(?i)\\b(?:date[\\s_-]*of[\\s_-]*birth|birth[\\s_-]*date|d\\.?o\\.?b|born(?:\\s+on)?(?:\\s+the)?)[\"']?\\W{0,5}(\\d{1,2}(?:st|nd|rd|th)?[\\s,.-]{1,3}(?:of\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]{0,6}[\\s,.-]{1,3}\\d{2,4})",
+          "group": 1
+        },
+        {
+          "regex": "(?i)\\b(?:date[\\s_-]*of[\\s_-]*birth|birth[\\s_-]*date|d\\.?o\\.?b|born(?:\\s+on)?(?:\\s+the)?)[\"']?\\W{0,5}((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]{0,6}[\\s,.-]{1,3}(?:\\d{1,2}(?:st|nd|rd|th)?[\\s,.-]{1,3})?\\d{4})",
           "group": 1
         }
       ]
@@ -305,7 +330,7 @@
       "category": "patient_or_national_id",
       "patterns": [
         {
-          "regex": "(?i)\\bnhs[\\s_-]*(?:no|number|id|#)?[\"']?\\W{0,5}(\\d{3}[ -]?\\d{3}[ -]?\\d{4})\\b",
+          "regex": "(?i)\\bnhs[\\s_-]*(?:no|number|id|#)?(?:\\s+is)?[\"']?\\W{0,5}(\\d(?:[\\s-]{0,2}\\d){9})\\b",
           "group": 1
         }
       ],
@@ -316,7 +341,11 @@
       "title": "US Social Security number (area rules)",
       "category": "patient_or_national_id",
       "patterns": [
-        "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+        "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+        {
+          "regex": "(?i)\\b(?:ssn|social[\\s_-]*security(?:[\\s_-]*(?:no|number|#))?)[\"']?\\W{0,5}(\\d{3}[ .-]?\\d{2}[ .-]?\\d{4})\\b",
+          "group": 1
+        }
       ],
       "validator": "us_ssn_area"
     },
@@ -340,7 +369,11 @@
       "title": "E-mail address",
       "category": "email",
       "patterns": [
-        "\\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\\.[A-Za-z]{2,}\\b"
+        "\\b(?:[A-Za-z0-9._%+-]|[^\\x00-\\x7f]){1,64}@[\\r\\n]?(?:[A-Za-z0-9.-]|[^\\x00-\\x7f]){1,255}\\.(?:xn--[A-Za-z0-9-]{1,59}|[A-Za-z]{2,})\\b",
+        "\"[A-Za-z0-9 ._%+-]{1,64}\"@[A-Za-z0-9.-]{1,255}\\.[A-Za-z]{2,}\\b",
+        "\\b[A-Za-z0-9._%+-]{1,64}@\\[[0-9A-Fa-f:.]{3,45}\\]",
+        "\\b[A-Za-z0-9._%+-]{1,64} ?[\\[(] ?[aA][tT] ?[\\])] ?[A-Za-z0-9-]{1,63}(?:(?:\\.| ?[\\[(] ?[dD][oO][tT] ?[\\])] ?)[A-Za-z0-9-]{1,63}){1,8}\\b",
+        "\\b[A-Za-z0-9._%+-]{1,64} [aA][tT] [A-Za-z0-9-]{1,63}(?: [dD][oO][tT] [A-Za-z0-9-]{1,63}){0,3} [dD][oO][tT] (?:com|org|net|edu|gov|io|uk|de|fr|es|nl|pl|ru|ca|au|jp|cn|br|ch|se|fi|dk|ie|eu|info|biz|app|dev|ai)\\b"
       ],
       "except": [
         "(?i)[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]{1,63}\\.)*example\\.(?:com|org|net)",
@@ -356,7 +389,8 @@
       "patterns": [
         "(?:\\+|\\b00)[1-9][0-9 .()-]{6,20}\\d",
         "\\b0\\d{2,4}[ -]?\\d{3,4}[ -]?\\d{3,4}\\b",
-        "(?:\\([2-9]\\d{2}\\) ?|\\b[2-9]\\d{2}[ .-])\\d{3}[ .-]\\d{4}\\b"
+        "(?:\\([2-9]\\d{2}\\) ?|\\b[2-9]\\d{2}[ .-])\\d{3}[ .-]\\d{4}\\b",
+        "\\(0\\d{2,4}\\) ?\\d{3,4}[ -]?\\d{3,4}\\b"
       ],
       "validator": "phone_digits"
     },
@@ -365,7 +399,7 @@
       "title": "IBAN (country length and mod 97)",
       "category": "iban",
       "patterns": [
-        "\\b(?:NO\\d{2}(?: ?[A-Z0-9]){11}|BE\\d{2}(?: ?[A-Z0-9]){12}|(?:DK|FI|FO|GL|NL)\\d{2}(?: ?[A-Z0-9]){14}|(?:MK|SI)\\d{2}(?: ?[A-Z0-9]){15}|(?:AT|BA|EE|KZ|LT|LU|XK)\\d{2}(?: ?[A-Z0-9]){16}|(?:CH|HR|LI|LV)\\d{2}(?: ?[A-Z0-9]){17}|(?:BG|BH|CR|DE|GB|GE|IE|ME|RS|VA)\\d{2}(?: ?[A-Z0-9]){18}|(?:AE|GI|IL|IQ|TL)\\d{2}(?: ?[A-Z0-9]){19}|(?:AD|CZ|ES|MD|PK|RO|SA|SE|SK|TN|VG)\\d{2}(?: ?[A-Z0-9]){20}|(?:PT|ST)\\d{2}(?: ?[A-Z0-9]){21}|(?:IS|TR)\\d{2}(?: ?[A-Z0-9]){22}|(?:FR|GR|IT|MC|MR|SM)\\d{2}(?: ?[A-Z0-9]){23}|(?:AL|AZ|BY|CY|DO|GT|HU|LB|PL|SV)\\d{2}(?: ?[A-Z0-9]){24}|(?:BR|EG|PS|QA|UA)\\d{2}(?: ?[A-Z0-9]){25}|(?:JO|KW|MU)\\d{2}(?: ?[A-Z0-9]){26}|(?:MT|SC)\\d{2}(?: ?[A-Z0-9]){27}|LC\\d{2}(?: ?[A-Z0-9]){28})"
+        "(?i)\\b(?:NO\\d{2}(?:[\\s.-]?[A-Z0-9]){11}|BE\\d{2}(?:[\\s.-]?[A-Z0-9]){12}|(?:DK|FI|FO|GL|NL)\\d{2}(?:[\\s.-]?[A-Z0-9]){14}|(?:MK|SI)\\d{2}(?:[\\s.-]?[A-Z0-9]){15}|(?:AT|BA|EE|KZ|LT|LU|XK)\\d{2}(?:[\\s.-]?[A-Z0-9]){16}|(?:CH|HR|LI|LV)\\d{2}(?:[\\s.-]?[A-Z0-9]){17}|(?:BG|BH|CR|DE|GB|GE|IE|ME|RS|VA)\\d{2}(?:[\\s.-]?[A-Z0-9]){18}|(?:AE|GI|IL|IQ|TL)\\d{2}(?:[\\s.-]?[A-Z0-9]){19}|(?:AD|CZ|ES|MD|PK|RO|SA|SE|SK|TN|VG)\\d{2}(?:[\\s.-]?[A-Z0-9]){20}|(?:PT|ST)\\d{2}(?:[\\s.-]?[A-Z0-9]){21}|(?:IS|TR)\\d{2}(?:[\\s.-]?[A-Z0-9]){22}|(?:FR|GR|IT|MC|MR|SM)\\d{2}(?:[\\s.-]?[A-Z0-9]){23}|(?:AL|AZ|BY|CY|DO|GT|HU|LB|PL|SV)\\d{2}(?:[\\s.-]?[A-Z0-9]){24}|(?:BR|EG|PS|QA|UA)\\d{2}(?:[\\s.-]?[A-Z0-9]){25}|(?:JO|KW|MU)\\d{2}(?:[\\s.-]?[A-Z0-9]){26}|(?:MT|SC)\\d{2}(?:[\\s.-]?[A-Z0-9]){27}|LC\\d{2}(?:[\\s.-]?[A-Z0-9]){28})"
       ],
       "validator": "iban_mod97"
     },
@@ -374,7 +408,8 @@
       "title": "Private IPv4 address",
       "category": "private_ip",
       "patterns": [
-        "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b"
+        "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+        "\\b\\d{1,3}(?:(?:\\[\\.\\]|\\(\\.\\)| \\. )\\d{1,3}){3}\\b"
       ],
       "validator": "private_ipv4"
     },
@@ -403,6 +438,14 @@
         {
           "regex": "\\b[A-Za-z]:\\\\Users\\\\([A-Za-z0-9._-]+)",
           "group": 1
+        },
+        {
+          "regex": "(?i)\\\\\\\\[a-z0-9._-]{1,63}\\\\(?:home|homes|users|profiles)\\$?\\\\([a-z0-9._-]+)",
+          "group": 1
+        },
+        {
+          "regex": "\\B~([A-Za-z_][A-Za-z0-9._-]{0,31})/",
+          "group": 1
         }
       ],
       "except_values": [
@@ -423,5 +466,5 @@
     }
   ],
   "note": "Generated from rules/privacy-v2.yaml by scripts/build_rules.py. Do not edit by hand. Rationale and fixtures live in the source; fixtures are in rules/conformance.v2.json.",
-  "source_sha256": "ba617eee82ef30c1003f8305a55cad385be0cabc413b6bb1fe62e4819ab1fd16"
+  "source_sha256": "a76c9c9f0ea13110c16a0981c168a9747ef9880091eac0e10ad5e645ddc586b4"
 }
