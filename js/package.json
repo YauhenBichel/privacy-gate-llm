@@ -1,6 +1,6 @@
 {
   "name": "privacy-gate-llm",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Must this prompt stay on this machine? The privacy-gate head (bge-m3 embedding in, hold or send out) and its PII, PHI and secret pattern rules for JavaScript and TypeScript. Zero dependencies.",
   "keywords": [
     "privacy", "pii", "phi", "pii-detection", "phi-detection", "guardrails", "llm-guardrail", "llm-safety",
